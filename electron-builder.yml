@@ -1,0 +1,25 @@
+appId: dev.aepg.zap
+productName: Zap
+directories:
+  output: release
+  buildResources: build
+files:
+  - "!**/.vscode/*"
+  - "!src/*"
+  - "!electron.vite.config.ts"
+  - "!**/*.{md,markdown}"
+  - "!**/{.eslintrc,.prettierrc,tsconfig*.json,postcss.config.js,tailwind.config.ts}"
+asar: true
+asarUnpack:
+  - "**/node_modules/node-pty/**/*"
+  - "**/node_modules/keytar/**/*"
+win:
+  target:
+    - nsis
+    - msi
+  artifactName: ${productName}-${version}-${arch}.${ext}
+mac:
+  target: dmg
+  category: public.app-category.developer-tools
+linux:
+  target: AppImage
