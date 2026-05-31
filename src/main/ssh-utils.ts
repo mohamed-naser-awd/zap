@@ -81,12 +81,18 @@ export function buildSshArgs(conn: Connection, opts: SshOpts = {}): { args: stri
 }
 
 /**
- * Quote a value if it contains whitespace, so rsync's `-e` tokenizer keeps it
- * as a single shell argument (e.g. `C:\Program Files\OpenSSH\ssh.exe`).
+ * Format a filesystem path for embedding inside the flattened `-e` ssh command
+ * passed to rsync. On Windows the path is converted to forward slashes (accepted
+ * by both Cygwin and native OpenSSH) so it carries no backslashes that Node's
+ * argv quoting would turn into `\"` — a sequence Cygwin's rsync.exe mis-parses,
+ * leaking literal backslashes into the path. Single-quote only when whitespace
+ * is present; Node passes single quotes through verbatim and rsync's rsh
+ * tokenizer honors them. (A literal single quote in the path is unsupported —
+ * vanishingly rare for key/host-file paths.)
  */
-function quoteIfSpace(s: string): string {
-  if (!/\s/.test(s)) return s
-  return `"${s.replace(/"/g, '\\"')}"`
+function rshPathArg(p: string): string {
+  const s = process.platform === 'win32' ? p.replace(/\\/g, '/') : p
+  return /\s/.test(s) ? `'${s}'` : s
 }
 
 /**
@@ -95,7 +101,7 @@ function quoteIfSpace(s: string): string {
 export function buildRsyncSshOption(conn: Connection): string {
   const settings = db.settings.get()
   const parts = [
-    quoteIfSpace(settings.sshBinary),
+    rshPathArg(settings.sshBinary),
     // -T: no pty allocation. Without this, the remote shell may print a login
     //     banner / MOTD that corrupts rsync's protocol stream and causes the
     //     classic "connection unexpectedly closed (0 bytes received)" /
@@ -107,10 +113,10 @@ export function buildRsyncSshOption(conn: Connection): string {
     `-p ${conn.port}`,
     '-o ServerAliveInterval=30',
     '-o StrictHostKeyChecking=accept-new',
-    `-o UserKnownHostsFile="${knownHostsPath().replace(/"/g, '\\"')}"`
+    `-o UserKnownHostsFile=${rshPathArg(knownHostsPath())}`
   ]
   if (conn.identityKey) {
-    parts.push(`-i "${conn.identityKey.path.replace(/"/g, '\\"')}"`)
+    parts.push(`-i ${rshPathArg(conn.identityKey.path)}`)
     parts.push('-o IdentitiesOnly=yes')
   }
   if (!conn.useAgent && !conn.identityKey) {
@@ -146,7 +152,10 @@ export async function getConnectionSecretEnv(conn: Connection): Promise<NodeJS.P
 function detectRsyncPathStyle(rsyncBinary: string): Exclude<RsyncPathStyle, 'auto'> {
   const bin = rsyncBinary.toLowerCase()
   if (bin.includes('wsl')) return 'wsl'
-  if (bin.includes('cwrsync') || bin.includes('cygwin')) return 'cygdrive'
+  // chocolatey's `rsync` package ships a Cygwin build (under
+  // …\chocolatey\lib\rsync\tools\bin), so it needs `/cygdrive/c/…` too.
+  if (bin.includes('cwrsync') || bin.includes('cygwin') || bin.includes('chocolatey'))
+    return 'cygdrive'
   // Git Bash / MSYS2 / vanilla rsync.exe — `/c/…` is the most widely accepted form.
   return 'msys'
 }
