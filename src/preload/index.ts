@@ -96,7 +96,7 @@ const api: ZapApi = {
     list: () => invoke<RsyncJob[]>(IpcChannels.rsyncList),
     onProgress: (cb: (p: { id: string; progress: { pct: number; rate: string; eta: string; transferredBytes: number } }) => void) =>
       on(IpcChannels.rsyncProgress, cb),
-    onDone: (cb: (p: { id: string; status: string; exitCode?: number; stderr?: string }) => void) =>
+    onDone: (cb: (p: { id: string; status: string; exitCode?: number; stderr?: string; direction: 'push' | 'pull' }) => void) =>
       on(IpcChannels.rsyncDone, cb)
   },
   sftp: {

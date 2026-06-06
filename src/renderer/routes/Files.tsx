@@ -90,6 +90,9 @@ export default function FilesView() {
   const [flagsTouched, setFlagsTouched] = useState(false)
   const [jobs, setJobs] = useState<RsyncJob[]>([])
   const [error, setError] = useState('')
+  // Bumped to force the destination pane to re-list after a successful transfer.
+  const [localRefreshTick, setLocalRefreshTick] = useState(0)
+  const [remoteRefreshTick, setRemoteRefreshTick] = useState(0)
 
   const flagTokens = useMemo(() => tokenize(flagsRaw), [flagsRaw])
 
@@ -117,7 +120,7 @@ export default function FilesView() {
         )
       )
     })
-    const offDone = zap.rsync.onDone(({ id, status, exitCode, stderr }) => {
+    const offDone = zap.rsync.onDone(({ id, status, exitCode, stderr, direction }) => {
       setJobs((prev) =>
         prev.map((j) =>
           j.id === id
@@ -125,6 +128,12 @@ export default function FilesView() {
             : j
         )
       )
+      // Refresh the destination pane so transferred files show up:
+      // push → remote pane, pull → local pane.
+      if (status === 'done') {
+        if (direction === 'push') setRemoteRefreshTick((t) => t + 1)
+        else setLocalRefreshTick((t) => t + 1)
+      }
     })
     return () => {
       offProg()
@@ -252,6 +261,7 @@ export default function FilesView() {
           entries={localEntries}
           setEntries={setLocalEntries}
           onTransferRequest={handleDrop}
+          refreshSignal={localRefreshTick}
         />
         <FileBrowser
           kind="remote"
@@ -264,6 +274,7 @@ export default function FilesView() {
           setEntries={setRemoteEntries}
           sep="/"
           onTransferRequest={handleDrop}
+          refreshSignal={remoteRefreshTick}
         />
       </div>
       <div className="border-t border-border p-2 max-h-48 overflow-auto">

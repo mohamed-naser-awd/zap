@@ -24,6 +24,8 @@ export type FileBrowserProps = {
   setEntries: (e: FsEntry[]) => void
   sep?: string
   onTransferRequest?: (req: TransferRequest) => void
+  /** Bumped by the parent to force a re-list of the current directory (e.g. after an rsync transfer lands here). */
+  refreshSignal?: number
 }
 
 // Carries the JSON payload. Only readable in `drop` (browsers blank getData()
@@ -79,7 +81,8 @@ export function FileBrowser({
   onSelectionChange,
   entries,
   setEntries,
-  onTransferRequest
+  onTransferRequest,
+  refreshSignal
 }: FileBrowserProps) {
   const [pathInput, setPathInput] = useState(cwd)
   const [error, setError] = useState('')
@@ -129,6 +132,14 @@ export function FileBrowser({
     reload(cwd).catch(() => undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionId])
+
+  // Parent bumps `refreshSignal` to re-list the current directory (e.g. after an
+  // rsync transfer lands in this pane). Skip the initial mount (tick 0).
+  useEffect(() => {
+    if (!refreshSignal) return
+    reload(cwd).catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal])
 
   // Reset focus & row-ref cache when the directory listing changes.
   useEffect(() => {

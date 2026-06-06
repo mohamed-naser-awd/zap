@@ -85,7 +85,7 @@ export interface ZapApi {
     cancel(id: string): Promise<Result<boolean>>
     list(): Promise<Result<RsyncJob[]>>
     onProgress(cb: (p: { id: string; progress: RsyncProgress }) => void): Unsubscribe
-    onDone(cb: (p: { id: string; status: string; exitCode?: number; stderr?: string }) => void): Unsubscribe
+    onDone(cb: (p: { id: string; status: string; exitCode?: number; stderr?: string; direction: 'push' | 'pull' }) => void): Unsubscribe
   }
   sftp: {
     list(connectionId: string, path: string): Promise<Result<FsEntry[]>>

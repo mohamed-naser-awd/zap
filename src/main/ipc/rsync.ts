@@ -155,7 +155,7 @@ export async function startRsync(opts: RsyncStartOpts): Promise<RsyncJob> {
     } else {
       log.info('rsync.exit', { id, status: job.status, exitCode: code, signal })
     }
-    const payload = { id, status: job.status, exitCode: code, stderr }
+    const payload = { id, status: job.status, exitCode: code, stderr, direction: job.direction }
     emitToWindows(IpcChannels.rsyncDone, payload)
     rsyncBus.emit('done', payload)
     active.delete(id)
@@ -164,7 +164,13 @@ export async function startRsync(opts: RsyncStartOpts): Promise<RsyncJob> {
   proc.once('error', (e) => {
     job.status = 'error'
     log.error('rsync.spawn-error', { id, error: e })
-    const payload = { id, status: 'error' as const, exitCode: undefined, stderr: e.message }
+    const payload = {
+      id,
+      status: 'error' as const,
+      exitCode: undefined,
+      stderr: e.message,
+      direction: job.direction
+    }
     emitToWindows(IpcChannels.rsyncDone, payload)
     rsyncBus.emit('done', payload)
   })

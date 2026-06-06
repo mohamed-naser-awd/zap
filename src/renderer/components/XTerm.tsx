@@ -111,19 +111,18 @@ export function XTerm({ connectionId, sessionName, commands, onClose }: XTermPro
     termRef.current = term
     fitRef.current = fit
 
-    // Both the Ctrl+Shift+V key handler AND the container `paste` event can
-    // fire for the same gesture on Windows (Chromium also dispatches `paste`
-    // for Ctrl+Shift+V depending on focus + keyboard layout). De-dup with a
-    // short window so whichever fires first wins and the second is ignored.
-    let lastPasteAt = 0
-    const PASTE_DEDUP_MS = 300
-    const writePastedText = (text: string) => {
-      if (!text || !ptyIdRef.current) return
-      const now = Date.now()
-      if (now - lastPasteAt < PASTE_DEDUP_MS) return
-      lastPasteAt = now
-      zap.terminal.write(ptyIdRef.current, text.replace(/\r\n/g, '\n'))
-    }
+    // NOTE: xterm already handles Ctrl+Shift+V (and right-click / Cmd+V) paste
+    // natively, so our custom paste layer was firing a *second* write for the
+    // same gesture → double paste. Leave paste entirely to xterm.
+    // let lastPasteAt = 0
+    // const PASTE_DEDUP_MS = 300
+    // const writePastedText = (text: string) => {
+    //   if (!text || !ptyIdRef.current) return
+    //   const now = Date.now()
+    //   if (now - lastPasteAt < PASTE_DEDUP_MS) return
+    //   lastPasteAt = now
+    //   zap.terminal.write(ptyIdRef.current, text.replace(/\r\n/g, '\n'))
+    // }
 
     // Intercept clipboard + composer chords BEFORE xterm processes them.
     // Returning false from the handler suppresses xterm's default action.
@@ -140,13 +139,15 @@ export function XTerm({ connectionId, sessionName, commands, onClose }: XTermPro
         if (sel) navigator.clipboard.writeText(sel).catch(() => undefined)
         return false
       }
-      if (key === 'v') {
-        navigator.clipboard
-          .readText()
-          .then(writePastedText)
-          .catch(() => undefined)
-        return false
-      }
+      // Paste is handled natively by xterm — don't intercept it here, or it
+      // pastes twice.
+      // if (key === 'v') {
+      //   navigator.clipboard
+      //     .readText()
+      //     .then(writePastedText)
+      //     .catch(() => undefined)
+      //   return false
+      // }
       if (e.key === 'Enter' || e.code === 'Enter') {
         setComposerOpen(true)
         return false
@@ -154,15 +155,17 @@ export function XTerm({ connectionId, sessionName, commands, onClose }: XTermPro
       return true
     })
 
-    // Native paste (right-click → Paste, macOS Cmd+V, etc.). Goes through the
-    // same de-dup'd writer as the keyboard shortcut.
-    const onContainerPaste = (e: ClipboardEvent) => {
-      const text = e.clipboardData?.getData('text')
-      if (!text) return
-      e.preventDefault()
-      writePastedText(text)
-    }
-    containerRef.current.addEventListener('paste', onContainerPaste)
+    // Native paste (right-click → Paste, macOS Cmd+V, etc.) is handled by xterm
+    // itself, which writes the pasted text through term.onData. Our own listener
+    // was a duplicate, so it's disabled.
+    // const onContainerPaste = (e: ClipboardEvent) => {
+    //   const text = e.clipboardData?.getData('text')
+    //   if (!text) return
+    //   e.preventDefault()
+    //   e.stopImmediatePropagation()
+    //   writePastedText(text)
+    // }
+    // containerRef.current.addEventListener('paste', onContainerPaste, true)
 
     let cancelled = false
 
@@ -298,7 +301,7 @@ export function XTerm({ connectionId, sessionName, commands, onClose }: XTermPro
       // If the user is staring at the failed overlay when the tab unmounts,
       // unblock the awaiter so it can clean up.
       decisionRef.current?.('close')
-      containerRef.current?.removeEventListener('paste', onContainerPaste)
+      // containerRef.current?.removeEventListener('paste', onContainerPaste, true)
       ro.disconnect()
       offData()
       offExit()
